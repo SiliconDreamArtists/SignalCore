@@ -103,4 +103,11 @@ function ConvertFrom-SignalJson {
     return $Json | ConvertFrom-Json -Depth 10
 }
 
-Export-ModuleMember -Function New-Signal, Add-SignalEntry, Merge-Signal, Get-SignalStatus, ConvertTo-SignalJson, ConvertFrom-SignalJson
+
+Set-Alias New-SignalEntry Add-SignalEntry
+Set-Alias To-SignalJson ConvertTo-SignalJson
+Set-Alias From-SignalJson ConvertFrom-SignalJson
+
+Export-ModuleMember -Alias New-SignalEntry, To-SignalJson, From-SignalJson
+
+#Export-ModuleMember -Function New-Signal, Add-SignalEntry, Merge-Signal, Get-SignalStatus, ConvertTo-SignalJson, ConvertFrom-SignalJson
