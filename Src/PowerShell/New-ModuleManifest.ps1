@@ -16,7 +16,5 @@ New-ModuleManifest -Path ./SignalCore.psd1 `
   -CompatiblePSEditions 'Core' `
   -PowerShellVersion '5.1'
 
-
-
-
-  
+ 
+  Invoke-GenerateModuleFile -OutputFile 'SignalCore.psm1' -Root $PSScriptRoot
