@@ -8,16 +8,18 @@ class SignalEntry {
     [string]$CreatedBy
     [string]$LastModifiedBy
     [bool]$IsReadOnly
+    [object]$Signal
 
     SignalEntry() {
         $this.CreatedDate = Get-Date
     }
 
-    SignalEntry([string]$level, [string]$message, [string]$nature = "Unspecified", [string]$exception = $null) {
+    SignalEntry([object]$signal, [string]$level, [string]$message, [string]$nature = "Unspecified", [string]$exception = $null) {
         $this.Level = $level
         $this.Message = $message
         $this.Nature = $nature
         $this.CreatedDate = Get-Date
         $this.Exception = $exception
+        $this.Signal = $signal
     }
 }
