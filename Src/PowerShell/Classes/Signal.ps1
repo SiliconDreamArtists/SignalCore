@@ -194,6 +194,12 @@ class Signal {
 
     [void] SetResult([object]$value) {
         # Add or update the "Result" property using dictionary-like update
+
+        # Don't wrap Signals in Signals, they can be passsed in directly so there's less interpretation needed, but we don't wrap a signal in a signal.
+        while ($value -is [Signal]) {
+            $value = $value.GetResult()
+        }
+
         $this.Result = $value
     }
 
