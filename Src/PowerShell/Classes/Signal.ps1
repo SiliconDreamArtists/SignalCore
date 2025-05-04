@@ -21,6 +21,7 @@ $Global:SignalFeedbackNature = @{
 
 class Signal {
     [object]$Pointer = $null
+    [object]$Jacket = $null
     [object]$Result = $null
     [string]$Name
     [string]$Level = 'Information'
@@ -251,6 +252,40 @@ class Signal {
         }
         else {
             $childSignal.LogCritical("❌ Pointer is missing in parent signal.")
+        }
+        return $childSignal
+    }
+
+    # ░▒▓█ JACKET MANAGEMENT █▓▒░
+    [void] SetJacket([object]$value) {
+        if ($null -eq $value) {
+            $this.LogWarning("⚠️ Jacket value is null; skipping set.")
+            return
+        }
+
+        $this.Jacket = $value
+        $this.LogInformation("🧥 Jacket set on signal '$($this.Name)'.")
+    }
+
+    [object] GetJacket() {
+        if ($null -ne $this.Jacket) {
+            $this.LogInformation("🧵 Retrieved Jacket from signal.")
+            return $this.Jacket
+        }
+        else {
+            $this.LogWarning("⚠️ No Jacket present on signal.")
+            return $null
+        }
+    }
+
+    [Signal] GetJacketSignal() {
+        $childSignal = [Signal]::new("GetJacketSignal:$($this.Name)")
+        if ($null -ne $this.Jacket) {
+            $childSignal.SetResult($this.Jacket)
+            $childSignal.LogInformation("✅ Jacket returned in new signal.")
+        }
+        else {
+            $childSignal.LogCritical("❌ Jacket is missing in parent signal.")
         }
         return $childSignal
     }
