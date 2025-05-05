@@ -229,6 +229,12 @@ class Signal {
     # ░▒▓█ Pointer MANAGEMENT █▓▒░
 
     [void] SetPointer([object]$value) {
+
+        # Don't wrap Signals in Signals, they can be passsed in directly so there's less interpretation needed, but we don't wrap a signal in a signal.
+        while ($value -is [Signal]) {
+            $value = $value.GetResult()
+        }
+        
         $this.Pointer = $value
         $this.LogInformation("📦 Pointer content set for signal '$($this.Name)'.")
     }
@@ -263,6 +269,11 @@ class Signal {
             return
         }
 
+        # Don't wrap Signals in Signals, they can be passsed in directly so there's less interpretation needed, but we don't wrap a signal in a signal.
+        while ($value -is [Signal]) {
+            $value = $value.GetResult()
+        }
+        
         $this.Jacket = $value
         $this.LogInformation("🧥 Jacket set on signal '$($this.Name)'.")
     }
