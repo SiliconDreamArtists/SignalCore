@@ -40,11 +40,11 @@ namespace SignalCore
 
         IEnumerable<string> GetFeedbackEntries(SignalFeedbackLevel minimumSeverityToGet);
 
-        Signal MergeFeedback(params Signal[] priorExecutionResults);
+        Signal MergeSignal(params Signal[] priorExecutionResults);
 
-        bool MergeFeedbackAndCheckForFail(params Signal[] priorExecutionResults);
+        bool MergeSignalAndCheckForFail(params Signal[] priorExecutionResults);
 
-        bool MergeFeedbackAndCheckForSuccess(params Signal[] priorExecutionResults);
+        bool MergeSignalAndVerifySuccess(params Signal[] priorExecutionResults);
 
         bool IsEnabled(LogLevel logLevel);
 

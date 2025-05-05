@@ -30,7 +30,7 @@ namespace SignalCore
 
         public Signal(params Signal[] priorSignals)
         {
-            this.MergeFeedback(priorSignals);
+            this.MergeSignal(priorSignals);
         }
 
         public static bool HasLogger => logger != null;
@@ -168,21 +168,21 @@ namespace SignalCore
             return $" - {ex.Message}";
         }
 
-        public bool MergeFeedbackAndCheckForFail(params Signal[] mergeFeedback)
+        public bool MergeSignalAndCheckForFail(params Signal[] mergeSignal)
         {
-            this.MergeFeedback(mergeFeedback);
+            this.MergeSignal(mergeSignal);
             return this.Failure;
         }
 
-        public bool MergeFeedbackAndCheckForSuccess(params Signal[] mergeFeedback)
+        public bool MergeSignalAndVerifySuccess(params Signal[] mergeSignal)
         {
-            this.MergeFeedback(mergeFeedback);
+            this.MergeSignal(mergeSignal);
             return this.Success;
         }
 
-        public Signal MergeFeedback(params Signal[] mergeFeedback)
+        public Signal MergeSignal(params Signal[] mergeSignal)
         {
-            foreach (Signal priorExecutionResult in mergeFeedback.ToList())
+            foreach (Signal priorExecutionResult in mergeSignal.ToList())
             {
                 if (priorExecutionResult?.entries != null && priorExecutionResult.entries.Count > 0)
                 {
