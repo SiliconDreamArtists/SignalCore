@@ -28,13 +28,16 @@ function Resolve-PathFromDictionary {
     function Expand-SymbolicPathSegments {
         param ([string[]]$RawSegments)
 
-        #todo externalize in a jacket.
+        # ░▒▓█ SDA SYMBOL MAP █▓▒░
         $symbolMap = @{
             "%" = "Jacket"
             "*" = "Pointer"
             "@" = "Result"
             "$" = "Signal"
             "#" = "Grid"
+            ":" = "Dimension" #Time, etc
+            "&" = "Binding" #Agent, Attachment, etc
+            "!" = "Polarity" #Volitile, Inversion
         }
         $expanded = foreach ($segment in $RawSegments) {
             if ($symbolMap.ContainsKey($segment)) { $symbolMap[$segment] } else { $segment }

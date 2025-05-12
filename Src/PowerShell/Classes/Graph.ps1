@@ -26,12 +26,12 @@ class Graph {
 
         $graph = [Graph]::new()
         $graph.ReversePointer = $reversePointer
-        $graph.Signal = [Signal]::Start($name, $reversePointer).GetResult()
+        $graph.Signal = [Signal]::Start($name, $reversePointer) | Select-Object -Last 1
         $graph.Signal.LogVerbose("🧠 Graph '$name' initialized via Start().")
 
         $resultSignal = [Signal]::Start("Graph.Instance:$name", $graph.Signal) | Select-Object -Last 1
         if ($setPointer) {
-            $resultSignal.Pointer = $graph
+            $resultSignal.SetPointer($graph)
         } else {
             $resultSignal.SetResult($graph)
         }
@@ -80,7 +80,7 @@ class Graph {
 
     [Signal] RegisterResultAsSignal([string]$Key, [object]$Result) {
         $opSignal = [Signal]::Start("RegisterResultAsSignal:$Key", $this.Signal) | Select-Object -Last 1
-        $resultSignal = [Signal]::Start($Key, $this.Signal).GetResult()
+        $resultSignal = [Signal]::Start($Key, $this.Signal) | Select-Object -Last 1
         $resultSignal.SetResult($Result)
         $opSignal.MergeSignal($this.RegisterSignal($Key, $resultSignal))
         return $opSignal

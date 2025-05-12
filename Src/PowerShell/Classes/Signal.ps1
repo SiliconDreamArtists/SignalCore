@@ -4,11 +4,12 @@ $Global:SignalFeedbackLevel = @{
     SensitiveInformation = 1
     Verbose              = 2
     Information          = 4
-    Warning              = 8
-    Retry                = 16
-    Recovery             = 24
-    Mute                 = 32
-    Critical             = 48
+    Diagram              = 8
+    Warning              = 16
+    Retry                = 24
+    Recovery             = 32
+    Mute                 = 48
+    Critical             = 64
 }
 
 $Global:SignalFeedbackNature = @{
@@ -41,20 +42,15 @@ class Signal {
         [object]$reversePointer = $null
     ) {
         $opSignal = [Signal]::new()
-
-        $signal = [Signal]::new()
-        $signal.Name = $name
-        $signal.LogVerbose("Signal '$name' initialized via Start().")
+        $opSignal.Name = $name
 
         if ($null -ne $reversePointer) {
-            $signal.SetReversePointer($reversePointer) | Out-Null
+            $opSignal.SetReversePointer($reversePointer) | Out-Null
             if ($reversePointer -is [Signal]) {
-                $signal.MergeSignal(@($reversePointer)) | Out-Null
+                $opSignal.MergeSignal(@($reversePointer)) | Out-Null
             }
         }
 
-        $opSignal.SetResult($signal)
-        $opSignal.LogInformation("✅ Signal created and returned from Start().")
         return $opSignal
     }
 
@@ -90,6 +86,10 @@ class Signal {
         return $this.LogMessage("Information", $message)
     }
 
+    [SignalEntry] LogDiagram([string]$message) {
+        return $this.LogMessage("Diagram", $message)
+    }
+
     [SignalEntry] LogWarning([string]$message) {
         return $this.LogMessage("Warning", $message)
     }
@@ -116,11 +116,12 @@ class Signal {
             "SensitiveInformation" = 1
             "Verbose"              = 2
             "Information"          = 4
-            "Warning"              = 8
-            "Retry"                = 16
-            "Recovery"             = 24
-            "Mute"                 = 32
-            "Critical"             = 48
+            "Diagram"              = 8
+            "Warning"              = 16
+            "Retry"                = 24
+            "Recovery"             = 32
+            "Mute"                 = 48
+            "Critical"             = 64
         }
 
         $newValue = $graph[$newLevel]
@@ -136,6 +137,9 @@ class Signal {
                 if ($this.Level -eq "Critical") {
                     $this.Level = "Warning"
                 }
+            }
+            "Diagram" {
+                # No action needed, as Diagram is a non-intrusive level.
             }
             default {
                 if ($newValue -gt $currentValue) {
@@ -203,6 +207,18 @@ class Signal {
         return $json | ConvertFrom-Json -Depth 20
     }
 
+    
+    [System.Collections.Generic.List[SignalEntry]] GetEntries() {
+        if ($null -ne $this.Entries) {
+            $this.LogInformation("🧵 Retrieved Entries from signal.")
+            return $this.Entries
+        }
+        else {
+            $this.LogWarning("⚠️ No Entries present on signal.")
+            return $null
+        }
+    }
+
     [void] SetResult([object]$value) {
 #Not done currently, waiting to look for the condition it's required before using it.
 #        while ($value -is [Signal]) {
@@ -224,7 +240,7 @@ class Signal {
     }
 
     [Signal] GetResultSignal() {
-        $opSignal = [Signal]::Start("GetResultSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetResultSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.Result) {
             $opSignal.SetResult($this.Result)
             $opSignal.LogInformation("✅ Result present and returned in new signal.")
@@ -236,7 +252,7 @@ class Signal {
     }
 
     [Signal] SetReversePointer([object]$value) {
-        $opSignal = [Signal]::Start("SetReversePointer:$($this.Name)")
+        $opSignal = [Signal]::Start("SetReversePointer:$($this.Name)") | Select-Object -Last 1
 
 #Not done currently, waiting to look for the condition it's required before using it.
 #        while ($value -is [Signal]) {
@@ -262,7 +278,7 @@ class Signal {
     }
 
     [Signal] GetReversePointerSignal() {
-        $opSignal = [Signal]::Start("GetReversePointerSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetReversePointerSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.ReversePointer) {
             $opSignal.SetReversePointer($this.ReversePointer)
             $opSignal.LogInformation("✅ ReversePointer present and returned in new signal.")
@@ -274,7 +290,7 @@ class Signal {
     }
 
     [Signal] SetPointer([object]$value) {
-        $opSignal = [Signal]::Start("SetPointer:$($this.Name)")
+        $opSignal = [Signal]::Start("SetPointer:$($this.Name)") | Select-Object -Last 1
 
         while ($value -is [Signal]) {
             $value = $value.GetResult()
@@ -299,7 +315,7 @@ class Signal {
     }
 
     [Signal] GetPointerSignal() {
-        $opSignal = [Signal]::Start("GetPointerSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetPointerSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.Pointer) {
             $opSignal.SetPointer($this.Pointer)
             $opSignal.LogInformation("✅ Pointer present and returned in new signal.")
@@ -311,7 +327,7 @@ class Signal {
     }
 
     [Signal] SetJacket([object]$value) {
-        $opSignal = [Signal]::Start("SetJacket:$($this.Name)")
+        $opSignal = [Signal]::Start("SetJacket:$($this.Name)") | Select-Object -Last 1
 
         if ($null -eq $value) {
             $opSignal.LogWarning("⚠️ Jacket value is null; skipping set.")
@@ -342,7 +358,7 @@ class Signal {
     }
 
     [Signal] GetJacketSignal() {
-        $opSignal = [Signal]::Start("GetJacketSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetJacketSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.Jacket) {
             $opSignal.SetResult($this.Jacket)
             $opSignal.LogInformation("✅ Jacket returned in new signal.")
