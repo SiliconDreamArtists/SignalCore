@@ -4,11 +4,12 @@ $Global:SignalFeedbackLevel = @{
     SensitiveInformation = 1
     Verbose              = 2
     Information          = 4
-    Warning              = 8
-    Retry                = 16
-    Recovery             = 24
-    Mute                 = 32
-    Critical             = 48
+    Diagram              = 8
+    Warning              = 16
+    Retry                = 24
+    Recovery             = 32
+    Mute                 = 48
+    Critical             = 64
 }
 
 $Global:SignalFeedbackNature = @{
@@ -21,6 +22,7 @@ $Global:SignalFeedbackNature = @{
 
 class Signal {
     [object]$Pointer = $null
+    [object]$ReversePointer = $null
     [object]$Jacket = $null
     [object]$Result = $null
     [string]$Name
@@ -29,10 +31,27 @@ class Signal {
 
     Signal() {}
 
-    Signal([string]$name) {
-        $this.Name = $name
-        $this.LogVerbose("Signal '$($this.Name)' initialized.")
-        $this.Result = $null
+    static [Signal] Start(
+        [string]$name
+    ) {
+        return [Signal]::Start($name, $null)
+    }
+
+    static [Signal] Start(
+        [string]$name,
+        [object]$reversePointer = $null
+    ) {
+        $opSignal = [Signal]::new()
+        $opSignal.Name = $name
+
+        if ($null -ne $reversePointer) {
+            $opSignal.SetReversePointer($reversePointer) | Out-Null
+            if ($reversePointer -is [Signal]) {
+                $opSignal.MergeSignal(@($reversePointer)) | Out-Null
+            }
+        }
+
+        return $opSignal
     }
 
     [SignalEntry] LogMessage([string]$level, [string]$message) {
@@ -49,14 +68,11 @@ class Signal {
         $this.Entries.Add($entry)
         $this.UpdateLevel($level)
 
-        # NEW: External logger support
         if ($Global:SignalLogger -ne $null) {
             try {
                 & $Global:SignalLogger.Invoke($this, $entry)
             }
-            catch {
-                # Fail quietly so Signal Pointer isn't compromised
-            }
+            catch {}
         }
 
         return $entry
@@ -68,6 +84,10 @@ class Signal {
 
     [SignalEntry] LogInformation([string]$message) {
         return $this.LogMessage("Information", $message)
+    }
+
+    [SignalEntry] LogDiagram([string]$message) {
+        return $this.LogMessage("Diagram", $message)
     }
 
     [SignalEntry] LogWarning([string]$message) {
@@ -89,27 +109,19 @@ class Signal {
     [SignalEntry] LogMute([string]$message) {
         return $this.LogMessage("Mute", $message)
     }
-        
-    # =============================================================================
-    # SovereignTrust Signal Escalation Ruleset (v1.1.1)
-    # -----------------------------------------------------------------------------
-    # - Signal.Level follows a linear severity graph unless explicitly downgraded.
-    # - 'Recovery' and 'Mute' are privileged levels that may reduce severity
-    #   from 'Critical' to 'Warning' under controlled circumstances.
-    # - This allows for lineage-preserving resolution (Recovery) or diagnostic mute (Mute)
-    # - All other levels escalate severity only when new > current.
-    # =============================================================================
+
     [void] UpdateLevel([string]$newLevel) {
         $graph = @{
             "Unspecified"          = 0
             "SensitiveInformation" = 1
             "Verbose"              = 2
             "Information"          = 4
-            "Warning"              = 8
-            "Retry"                = 16
-            "Recovery"             = 24
-            "Mute"                 = 32
-            "Critical"             = 48
+            "Diagram"              = 8
+            "Warning"              = 16
+            "Retry"                = 24
+            "Recovery"             = 32
+            "Mute"                 = 48
+            "Critical"             = 64
         }
 
         $newValue = $graph[$newLevel]
@@ -126,6 +138,9 @@ class Signal {
                     $this.Level = "Warning"
                 }
             }
+            "Diagram" {
+                # No action needed, as Diagram is a non-intrusive level.
+            }
             default {
                 if ($newValue -gt $currentValue) {
                     $this.Level = $newLevel
@@ -133,7 +148,7 @@ class Signal {
             }
         }
     }
-        
+
     [bool] Failure() {
         return $this.Level -eq 'Critical'
     }
@@ -178,7 +193,6 @@ class Signal {
                 $this.LogMute("🔇 Critical signal merged with mute intent, local flow blocked — severity downgraded.")
             }
 
-            # This returns a false so it fails the Verify Success even though it will be successful on the next level / success test.
             return $false
         }
 
@@ -193,17 +207,33 @@ class Signal {
         return $json | ConvertFrom-Json -Depth 20
     }
 
-    [void] SetResult([object]$value) {
-        # Add or update the "Result" property using dictionary-like update
+    
+    [System.Collections.Generic.List[SignalEntry]] GetEntries() {
+        if ($null -ne $this.Entries) {
+            $this.LogInformation("🧵 Retrieved Entries from signal.")
+            return $this.Entries
+        }
+        else {
+            $this.LogWarning("⚠️ No Entries present on signal.")
+            return $null
+        }
+    }
 
-        # Don't wrap Signals in Signals, they can be passsed in directly so there's less interpretation needed, but we don't wrap a signal in a signal.
-        while ($value -is [Signal]) {
-            $value = $value.GetResult()
+    [void] SetResult([object]$value) {
+        $this.SetResult($value, $false)
+            }
+
+    [void] SetResult([object]$value, [bool]$unwrap) {
+        if ($unwrap)
+        {
+            while ($value -is [Signal]) {
+                $value = $value.GetResult() | Select-Object -Last 1
+            }
         }
 
         $this.Result = $value
     }
-
+        
     [object] GetResult() {
         if ($null -ne $this.Result) {
             $this.LogInformation("✅ Retrieved result from signal.")
@@ -216,27 +246,67 @@ class Signal {
     }
 
     [Signal] GetResultSignal() {
-        $childSignal = [Signal]::new("GetResultSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetResultSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.Result) {
-            $childSignal.SetResult($this.Result)
-            $childSignal.LogInformation("✅ Result present and returned in new signal.")
+            $opSignal.SetResult($this.Result)
+            $opSignal.LogInformation("✅ Result present and returned in new signal.")
         }
         else {
-            $childSignal.LogCritical("❌ Result is missing in parent signal.")
+            $opSignal.LogCritical("❌ Result is missing in parent signal.")
         }
-        return $childSignal
+        return $opSignal
     }
-    # ░▒▓█ Pointer MANAGEMENT █▓▒░
 
-    [void] SetPointer([object]$value) {
+    [Signal] SetReversePointer([object]$value) {
+        $opSignal = [Signal]::Start("SetReversePointer:$($this.Name)") | Select-Object -Last 1
 
-        # Don't wrap Signals in Signals, they can be passsed in directly so there's less interpretation needed, but we don't wrap a signal in a signal.
+#Not done currently, waiting to look for the condition it's required before using it.
+#        while ($value -is [Signal]) {
+#            $value = $value.GetResult()
+#        }
+
+        $this.ReversePointer = $value
+        $opSignal.LogInformation("🔄 ReversePointer set on signal '$($this.Name)'.")
+        $opSignal.SetResult($this)
+
+        return $opSignal
+    }
+
+    [object] GetReversePointer() {
+        if ($null -ne $this.ReversePointer) {
+            $this.LogInformation("✅ Retrieved ReversePointer from signal.")
+            return $this.ReversePointer
+        }
+        else {
+            $this.LogWarning("⚠️ No ReversePointer content present in signal.")
+            return $null
+        }
+    }
+
+    [Signal] GetReversePointerSignal() {
+        $opSignal = [Signal]::Start("GetReversePointerSignal:$($this.Name)") | Select-Object -Last 1
+        if ($null -ne $this.ReversePointer) {
+            $opSignal.SetReversePointer($this.ReversePointer)
+            $opSignal.LogInformation("✅ ReversePointer present and returned in new signal.")
+        }
+        else {
+            $opSignal.LogCritical("❌ ReversePointer is missing in parent signal.")
+        }
+        return $opSignal
+    }
+
+    [Signal] SetPointer([object]$value) {
+        $opSignal = [Signal]::Start("SetPointer:$($this.Name)") | Select-Object -Last 1
+
         while ($value -is [Signal]) {
             $value = $value.GetResult()
         }
-        
+
         $this.Pointer = $value
-        $this.LogInformation("📦 Pointer content set for signal '$($this.Name)'.")
+        $opSignal.LogInformation("📦 Pointer content set on signal '$($this.Name)'.")
+        $opSignal.SetResult($this)
+
+        return $opSignal
     }
 
     [object] GetPointer() {
@@ -251,31 +321,35 @@ class Signal {
     }
 
     [Signal] GetPointerSignal() {
-        $childSignal = [Signal]::new("GetPointerSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetPointerSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.Pointer) {
-            $childSignal.SetPointer($this.Pointer)
-            $childSignal.LogInformation("✅ Pointer present and returned in new signal.")
+            $opSignal.SetPointer($this.Pointer)
+            $opSignal.LogInformation("✅ Pointer present and returned in new signal.")
         }
         else {
-            $childSignal.LogCritical("❌ Pointer is missing in parent signal.")
+            $opSignal.LogCritical("❌ Pointer is missing in parent signal.")
         }
-        return $childSignal
+        return $opSignal
     }
 
-    # ░▒▓█ JACKET MANAGEMENT █▓▒░
-    [void] SetJacket([object]$value) {
+    [Signal] SetJacket([object]$value) {
+        $opSignal = [Signal]::Start("SetJacket:$($this.Name)") | Select-Object -Last 1
+
         if ($null -eq $value) {
-            $this.LogWarning("⚠️ Jacket value is null; skipping set.")
-            return
+            $opSignal.LogWarning("⚠️ Jacket value is null; skipping set.")
+            $opSignal.SetResult($this)
+            return $opSignal
         }
 
-        # Don't wrap Signals in Signals, they can be passsed in directly so there's less interpretation needed, but we don't wrap a signal in a signal.
-        while ($value -is [Signal]) {
-            $value = $value.GetResult()
-        }
-        
+#        while ($value -is [Signal]) {
+#            $value = $value.GetResult()
+#        }
+
         $this.Jacket = $value
-        $this.LogInformation("🧥 Jacket set on signal '$($this.Name)'.")
+        $opSignal.LogInformation("🧥 Jacket set on signal '$($this.Name)'.")
+        $opSignal.SetResult($this)
+
+        return $opSignal
     }
 
     [object] GetJacket() {
@@ -290,14 +364,33 @@ class Signal {
     }
 
     [Signal] GetJacketSignal() {
-        $childSignal = [Signal]::new("GetJacketSignal:$($this.Name)")
+        $opSignal = [Signal]::Start("GetJacketSignal:$($this.Name)") | Select-Object -Last 1
         if ($null -ne $this.Jacket) {
-            $childSignal.SetResult($this.Jacket)
-            $childSignal.LogInformation("✅ Jacket returned in new signal.")
+            $opSignal.SetResult($this.Jacket)
+            $opSignal.LogInformation("✅ Jacket returned in new signal.")
         }
         else {
-            $childSignal.LogCritical("❌ Jacket is missing in parent signal.")
+            $opSignal.LogCritical("❌ Jacket is missing in parent signal.")
         }
-        return $childSignal
+        return $opSignal
+    }
+
+    [Signal[]] GetLineage() {
+        $lineage = @()
+
+        if ($this.Pointer -is [Signal]) {
+            $lineage += $this.Pointer
+            $lineage += $this.Pointer.GetLineage()
+        }
+        elseif ($this.Pointer -is [System.Collections.IEnumerable]) {
+            foreach ($parent in $this.Pointer) {
+                if ($parent -is [Signal]) {
+                    $lineage += $parent
+                    $lineage += $parent.GetLineage()
+                }
+            }
+        }
+
+        return $lineage
     }
 }
