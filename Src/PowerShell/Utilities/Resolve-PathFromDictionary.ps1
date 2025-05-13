@@ -54,6 +54,12 @@ function Resolve-PathFromDictionary {
             $signal.LogVerbose("🧬 Symbolic path expansion detected — SkipFinalInternalUnwrap auto-enabled.")
         }
 
+        # TODO, only set to true if one of the last words was replaced.
+        if ($parts[-1] -eq "Signal" -or $parts -eq "Signal") {
+            $signal.LogVerbose("🔍 Symbolic path expansion detected — SkipFinalInternalUnwrap auto-disabled.")
+            $SkipFinalInternalUnwrap = $true
+        }
+        
         if (-not $SkipFinalInternalUnwrap -and $parts[-1] -match '(?i)(Graph|Signal|Grid|Pointer)$') {
             $SkipFinalInternalUnwrap = $true
             $signal.LogVerbose("🧠 SkipFinalInternalUnwrap auto-enabled for path suffix match: '$Path'")
