@@ -4,7 +4,7 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-namespace SignalCore
+namespace SignalGraph
 {
     using System;
     using System.Runtime.Serialization;

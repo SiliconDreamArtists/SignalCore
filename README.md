@@ -1,6 +1,6 @@
-# SovereignTrust-SignalCore
+# SovereignTrust-SignalGraph
 
-**SovereignTrust-SignalCore** defines the universal result and feedback object used across the entire [SovereignTrust](https://sovereigntrust.foundation) protocol stack. The `Signal<T>` class provides a structured, verifiable format for propagating execution results, feedback entries, and command metadata between agents.
+**SovereignTrust-SignalGraph** defines the universal result and feedback object used across the entire [SovereignTrust](https://sovereigntrust.foundation) protocol stack. The `Signal<T>` class provides a structured, verifiable format for propagating execution results, feedback entries, and command metadata between agents.
 
 This library serves as the core language for decentralized execution coordination.
 
@@ -109,7 +109,7 @@ var final = signal.ToJson();
 
 ## 🧠 Design Philosophy
 
-SignalCore formalizes the **execution result layer** of decentralized intent coordination. It ensures every SovereignTrust action, regardless of platform, produces a **verifiable, readable, mergeable record** of what happened and why.
+SignalGraph formalizes the **execution result layer** of decentralized intent coordination. It ensures every SovereignTrust action, regardless of platform, produces a **verifiable, readable, mergeable record** of what happened and why.
 
 ---
 

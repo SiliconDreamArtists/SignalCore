@@ -2,7 +2,7 @@
 //     Copyright (c) Silicon Dream Artists. All rights reserved.
 // </copyright>
 
-namespace SignalCore
+namespace SignalGraph
 {
     using System.Collections.Generic;
 

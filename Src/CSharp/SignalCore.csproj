@@ -2,12 +2,12 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <RootNamespace>SignalCore</RootNamespace>
+    <RootNamespace>SignalGraph</RootNamespace>
     <AssemblyName>Signal.Core</AssemblyName>
     <Authors>Silicon Dream Artists</Authors>
     <Company>Silicon Dream Artists</Company>
     <Version>1.0.0</Version>
-    <PackageId>SovereignTrust-SignalCore</PackageId>
+    <PackageId>SovereignTrust-SignalGraph</PackageId>
     <Description>Universal Signal format for decentralized, verifiable intent execution. Part of the SovereignTrust protocol suite.</Description>
     <PackageTags>signal sovereigntrust messaging protocol decentralized trust</PackageTags>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>

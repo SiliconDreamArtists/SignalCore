@@ -4,7 +4,7 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-namespace SignalCore
+namespace SignalGraph
 {
     public interface ISignal<T> : ISignal
     {
