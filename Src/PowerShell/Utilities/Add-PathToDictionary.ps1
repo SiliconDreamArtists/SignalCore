@@ -1,181 +1,203 @@
 function Add-PathToDictionary {
     param (
-        [Parameter(Mandatory)] $Dictionary,
+        [Parameter(Mandatory)] $Signal,
         [Parameter(Mandatory)] [string]$Path,
         [Parameter()] $Value
     )
 
-    $signal = [Signal]::Start("Add-PathToDictionary", $Dictionary) | Select-Object -Last 1
+    $opSignal = [Signal]::Start("Add-PathToDictionary", $Signal) | Select-Object -Last 1
 
-    function Expand-SymbolicPathSegments {
-        param ([string[]]$RawSegments)
+    $symbolMap = @{
+        "%" = "Jacket"
+        "*" = "Pointer"
+        "@" = "Result"
+        "$" = "Signal"
+        "#" = "Grid"
+    }
 
-        #todo externalize in a jacket.
-        $symbolMap = @{
-            "%" = "Jacket"
-            "*" = "Pointer"
-            "@" = "Result"
-            "$" = "Signal"
-            "#" = "Grid"
-        }
-        return $RawSegments | ForEach-Object {
+    function Expand-Symbols {
+        param ([string[]]$segments)
+        return $segments | ForEach-Object {
             if ($symbolMap.ContainsKey($_)) { $symbolMap[$_] } else { $_ }
         }
     }
 
-    function Unwrap-InternalObjects {
-        param (
-            [object]$obj,
-            [string]$segment
-        )
-        $current = $obj
-        $check = $true
-        while ($check) {
-            $check = $false
-            if ($current -is [Signal] -and $segment -ne 'Jacket') {
-                $current = $current.GetResult()
-                $check = $true
-            } elseif ($current -is [Graph]) {
-                $current = $current.Grid
-                $check = $true
-            }
-        }
-        return $current
-    }
-
-    function Parse-FilterSegment {
-        param([string]$segment)
-        $result = @{ IsFilter = $false; Raw = $segment }
-        if ($segment -match '^([^\[]+)') { $result.ArrayKey = $matches[1] } else { return $result }
-        $filterPattern = '\[([^\[\]=!~]+?)(!?=|~=|~=i)\s*(["''"])(.*?)\3\]'
-        $matches = [regex]::Matches($segment, $filterPattern)
-        if ($matches.Count -gt 0) {
-            $result.IsFilter = $true
-            $result.Filters = @()
-            foreach ($m in $matches) {
-                $op = switch ($m.Groups[2].Value) {
-                    '='     { '-eq' }
-                    '!='    { '-ne' }
-                    '~='    { '-like' }
-                    '~=i'   { '-ilike' }
-                    default { '-eq' }
-                }
-                $result.Filters += @{ Key = $m.Groups[1].Value.Trim(); Op = $op; Value = $m.Groups[4].Value.Trim() }
-            }
-        }
-        return $result
-    }
-
     try {
-        $parts = Expand-SymbolicPathSegments -RawSegments ($Path -split '\.')
-        $current = $Dictionary
+        $rawSegments = $Path -split '\.'
+        $segments = Expand-Symbols -segments $rawSegments
 
-        for ($i = 0; $i -lt $parts.Length; $i++) {
-            $part = $parts[$i]
-            $isLast = ($i -eq $parts.Length - 1)
+        if ($segments.Count -lt 1) {
+            $opSignal.LogCritical("❌ Path too short or empty.")
+            return $opSignal
+        }
+
+        $current = $Signal
+
+        for ($i = 0; $i -lt $segments.Count; $i++) {
+            $key = $segments[$i]
+            $isFinal = ($i -eq $segments.Count - 1)
 
             if ($null -eq $current) {
-                $signal.LogCritical("Current object is null while traversing path segment '$part'.")
-                return $signal
+                $opSignal.LogCritical("❌ Null encountered at segment '$key'")
+                return $opSignal
             }
 
-            $parsed = Parse-FilterSegment $part
-            if ($parsed.IsFilter) {
-                $signal.LogCritical("Add-PathToDictionary does not support filtered segments like '$part'.")
-                return $signal
+            # Auto-unwrap Signal/Graph
+            #if ($current -is [Signal]) { $current = $current.GetResult() }
+            #if ($current -is [Graph])  { $current = $current.Grid }
+
+            $processed = $false
+
+            # ░▒▓█ SYMBOLIC STRUCTURE STEPS █▓▒░
+            switch ($key) {
+                "Jacket" {
+                    if ($current -is [Signal]) {
+                        $current = $current.GetJacket()
+                        $processed = $true
+                        continue
+                    } else {
+                        $opSignal.LogCritical("❌ 'Jacket' expected Signal, got $($current.GetType().Name)")
+                        return $opSignal
+                    }
+                }
+                "Pointer" {
+                    if ($current -is [Signal]) {
+                        if (-not $current.Pointer) {
+                            $current.Pointer = [Graph]::Start("AutoCreated")
+                        }
+                        $current = $current.GetPointer()
+                        $processed = $true
+                        continue
+                    } else {
+                        $opSignal.LogCritical("❌ 'Pointer' expected Signal, got $($current.GetType().Name)")
+                        return $opSignal
+                    }
+                }
+                "Result" {
+                    if ($current -is [Signal]) {
+                        if (-not $current.GetResult()) {
+                            $current.SetResult(@{})
+                        }
+                        $current = $current.GetResult()
+                        $processed = $true
+                        continue
+                    }
+                    elseif ($current -is [Graph]) {
+                        if (-not $current.Grid) {
+                            $current.Grid = [Signal]::Start("AutoCreated")
+                        }
+                        $current = $current.Grid
+                        $processed = $true
+                        continue
+                    } else {
+                        $opSignal.LogCritical("❌ 'Result' segment unsupported on $($current.GetType().Name)")
+                        return $opSignal
+                    }
+                }
+                "Grid" {
+                    if ($current -is [Graph]) {
+                        if (-not $current.Grid) {
+                            $current.Grid = @{}
+                        }
+                        $current = $current.Grid
+                        $processed = $true
+                        continue
+                    } else {
+                        $graph = [Graph]::Start("AutoCreated")
+                        if ($current -is [System.Collections.IDictionary]) {
+                            $current["Grid"] = $graph.Grid
+                            $current = $graph.Grid
+                            continue
+                        } else {
+                            $opSignal.LogCritical("❌ 'Grid' requires Graph or dictionary host.")
+                            return $opSignal
+                        }
+                    }
+                }
+                "Signal" {
+                    if ($current -is [System.Collections.IDictionary]) {
+                        if (-not $current.Contains("Signal")) {
+                            $current["Signal"] = [Signal]::Start("AutoCreated")
+                        }
+                        $current = $current["Signal"]
+                        $processed = $true
+                        continue
+                    } else {
+                        $opSignal.LogCritical("❌ 'Signal' key requires dictionary host.")
+                        return $opSignal
+                    }
+                }
             }
 
-            $current = Unwrap-InternalObjects -obj $current -segment $parsed.Raw
-            $key = $parsed.Raw
 
-            if ($current -is [System.Collections.IDictionary]) {
-                if ($isLast) {
+            # ░▒▓█ FINAL WRITE █▓▒░
+            if ($isFinal) {
+                if ($current -is [System.Collections.IDictionary]) {
                     $current[$key] = $Value
-                } elseif (-not $current.Contains($key)) {
+                }
+                elseif ($current -is [PSCustomObject] -or $current -is [System.Management.Automation.PSObject]) {
+                    if (-not $current.PSObject.Properties[$key]) {
+                        Add-Member -InputObject $current -MemberType NoteProperty -Name $key -Value $Value
+                    } else {
+                        $current.$key = $Value
+                    }
+                }
+                elseif ($current.GetType().IsClass -and $current.GetType().Namespace -ne "System") {
+                    $prop = $current.GetType().GetProperty($key)
+                    if ($null -eq $prop -or -not $prop.CanWrite) {
+                        $opSignal.LogCritical("❌ Cannot write '$key' on class '$($current.GetType().Name)'")
+                        return $opSignal
+                    }
+                    $prop.SetValue($current, $Value)
+                }
+                else {
+                    $opSignal.LogCritical("❌ Unsupported type at final write: $($current.GetType().FullName)")
+                    return $opSignal
+                }
+
+                $opSignal.LogInformation("📥 Wrote '$key' → $($Value.GetType().Name)")
+                $opSignal.SetResult($Signal)
+                return $opSignal
+            }
+
+            if ($processed) {
+                continue
+            }
+
+            # ░▒▓█ INTERMEDIATE OBJECTS █▓▒░
+            if ($current -is [System.Collections.IDictionary]) {
+                if (-not $current.Contains($key)) {
                     $current[$key] = @{}
                 }
                 $current = $current[$key]
             }
-            elseif ($current -is [System.Collections.IEnumerable] -and -not ($current -is [string])) {
-                if ($current -is [System.Collections.IList]) {
-                    if ($isLast) {
-                        $found = $null
-                        $index = 0
-                        foreach ($item in $current) {
-                            if (($item -is [pscustomobject] -or $item -is [hashtable]) -and $item.Name -eq $key) {
-                                $found = $item; break
-                            }
-                            $index++
-                        }
-                        if ($null -ne $found) {
-                            $current[$index] = $Value
-                        } else {
-                            $current.Add($Value)
-                        }
-                    } else {
-                        $found = $null
-                        foreach ($item in $current) {
-                            if (($item -is [pscustomobject] -or $item -is [hashtable]) -and $item.Name -eq $key) {
-                                $found = $item; break
-                            }
-                        }
-                        if ($null -eq $found) {
-                            $signal.LogWarning("No item with Name '$key' found in array segment.")
-                            return $signal
-                        }
-                        $current = $found
-                    }
-                } else {
-                    $signal.LogCritical("Cannot add to non-list enumerable at path segment '$key'.")
-                    return $signal
-                }
-            }
             elseif ($current -is [PSCustomObject] -or $current -is [System.Management.Automation.PSObject]) {
-                $existingProp = $current.PSObject.Properties[$key]
-                if ($isLast) {
-                    if ($existingProp) {
-                        $current.$key = $Value
-                    } else {
-                        Add-Member -InputObject $current -MemberType NoteProperty -Name $key -Value $Value
-                    }
-                } else {
-                    if (-not $existingProp) {
-                        $child = [PSCustomObject]@{}
-                        Add-Member -InputObject $current -MemberType NoteProperty -Name $key -Value $child
-                        $current = $child
-                    } else {
-                        $current = $current.$key
-                    }
+                if (-not $current.PSObject.Properties[$key]) {
+                    Add-Member -InputObject $current -MemberType NoteProperty -Name $key -Value (@{})
                 }
+                $current = $current.$key
             }
             elseif ($current.GetType().IsClass -and $current.GetType().Namespace -ne "System") {
-                $propInfo = $current.GetType().GetProperty($key)
-                if ($null -eq $propInfo) {
-                    $signal.LogCritical("Class $($current.GetType().Name) does not have a property named '$key'.")
-                    return $signal
+                $prop = $current.GetType().GetProperty($key)
+                if ($null -eq $prop) {
+                    $opSignal.LogCritical("❌ Class '$($current.GetType().Name)' missing property '$key'")
+                    return $opSignal
                 }
-                if ($isLast) {
-                    $propInfo.SetValue($current, $Value, $null)
-                } else {
-                    $next = $propInfo.GetValue($current, $null)
-                    if ($null -eq $next) {
-                        $signal.LogCritical("Intermediate class property '$key' is null; cannot proceed.")
-                        return $signal
-                    }
-                    $current = $next
+                $next = $prop.GetValue($current)
+                if ($null -eq $next) {
+                    $next = New-Object -TypeName $prop.PropertyType
+                    $prop.SetValue($current, $next)
                 }
-            } else {
-                $signal.LogCritical("Unsupported object type: $($current.GetType().FullName) at path '$Path'.")
-                return $signal
+                $current = $next
+            }
+            else {
+                $opSignal.LogCritical("❌ Unsupported type at '$key': $($current.GetType().FullName)")
+                return $opSignal
             }
         }
-
-        $signal.SetResult($Value)
-        $signal.LogInformation("Path '$Path' successfully added to dictionary.")
     }
     catch {
-        $signal.LogCritical("Critical failure while adding path to dictionary: $_")
+        $opSignal.LogCritical("❌ Exception during Add-PathToDictionary: $_")
+        return $opSignal
     }
-
-    return $signal
 }

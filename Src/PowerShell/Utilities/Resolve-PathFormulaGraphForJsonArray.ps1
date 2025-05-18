@@ -38,9 +38,8 @@ function Resolve-PathFormulaGraphForJsonArray {
     # ░▒▓█ BUILD SIGNALS AND REGISTER TO GRAPH █▓▒░
     $signalMap = @{}
     foreach ($item in $flatArray) {
-        $id = $item.ID
-        $signal = [Signal]::Start("Node:$id", $opSignal, $null, $item) | Select-Object -Last 1
-        $signalMap[$id] = $signal.GetResult()
+        $id = $item.Identifier
+        $signalMap[$id] = [Signal]::Start("Node:$id", $opSignal, $null, $item) | Select-Object -Last 1
     }
 
     foreach ($signal in $signalMap.Values) {

@@ -77,7 +77,7 @@ function Resolve-PathFromDictionary {
                 $current = Unwrap-InternalObjects $current
             }
 
-            if ($part -eq "*") {
+            if ($part -eq "Pointer") {
                 if ($current -is [Signal] -and $current.PSObject.Properties["Pointer"]) {
                     $current = $current.Pointer
                     $signal.LogVerbose("🔗 Dereferenced *Pointer in signal.")
