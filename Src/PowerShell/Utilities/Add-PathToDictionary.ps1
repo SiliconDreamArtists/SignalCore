@@ -1,15 +1,16 @@
 function Add-PathToDictionary {
     param (
-        [Parameter(Mandatory)] $Signal,
+        $Dictionary,
         [Parameter(Mandatory)] [string]$Path,
         [Parameter()] $Value
     )
 
-    $opSignal = [Signal]::Start("Add-PathToDictionary", $Signal) | Select-Object -Last 1
+    $opSignal = [Signal]::Start("Add-PathToDictionary", $Dictionary) | Select-Object -Last 1
 
     $symbolMap = @{
         "%" = "Jacket"
         "*" = "Pointer"
+        "!" = "ReversePointer"
         "@" = "Result"
         "$" = "Signal"
         "#" = "Grid"
@@ -22,19 +23,38 @@ function Add-PathToDictionary {
         }
     }
 
+    function Update-ContextFromSegment {
+        param (
+            [object]$CurrentContext,
+            [string]$Key
+        )
+
+        switch ($Key) {
+            "Signal" { return $CurrentContext }
+            #"Pointer" { return "Pointer" }
+            "Grid" { return $CurrentContext }
+            #"Result" { return "Result" }
+            #"Jacket" { return "Jacket" }
+            default { return $CurrentContext }
+        }
+    }
+
     try {
         $rawSegments = $Path -split '\.'
         $segments = Expand-Symbols -segments $rawSegments
+        $currentContext = $null
 
         if ($segments.Count -lt 1) {
             $opSignal.LogCritical("❌ Path too short or empty.")
             return $opSignal
         }
 
-        $current = $Signal
+        $current = $Dictionary
 
         for ($i = 0; $i -lt $segments.Count; $i++) {
             $key = $segments[$i]
+
+            $currentContext = Update-ContextFromSegment -CurrentContext $currentContext -Key $key
             $isFinal = ($i -eq $segments.Count - 1)
 
             if ($null -eq $current) {
@@ -55,7 +75,8 @@ function Add-PathToDictionary {
                         $current = $current.GetJacket()
                         $processed = $true
                         continue
-                    } else {
+                    }
+                    else {
                         $opSignal.LogCritical("❌ 'Jacket' expected Signal, got $($current.GetType().Name)")
                         return $opSignal
                     }
@@ -63,19 +84,21 @@ function Add-PathToDictionary {
                 "Pointer" {
                     if ($current -is [Signal]) {
                         if (-not $current.Pointer) {
-                            $current.Pointer = [Graph]::Start("AutoCreated")
+                            $current.SetPointer(([Graph]::Start("AutoCreated", $current, $true) | select-Object -Last 1).GetResult())
                         }
                         $current = $current.GetPointer()
+                        $currentContext = $current
                         $processed = $true
                         continue
-                    } else {
+                    }
+                    else {
                         $opSignal.LogCritical("❌ 'Pointer' expected Signal, got $($current.GetType().Name)")
                         return $opSignal
                     }
                 }
                 "Result" {
                     if ($current -is [Signal]) {
-                        if (-not $current.GetResult()) {
+                        if (-not $current.HasResult()) {
                             $current.SetResult(@{})
                         }
                         $current = $current.GetResult()
@@ -89,7 +112,8 @@ function Add-PathToDictionary {
                         $current = $current.Grid
                         $processed = $true
                         continue
-                    } else {
+                    }
+                    else {
                         $opSignal.LogCritical("❌ 'Result' segment unsupported on $($current.GetType().Name)")
                         return $opSignal
                     }
@@ -102,16 +126,22 @@ function Add-PathToDictionary {
                         $current = $current.Grid
                         $processed = $true
                         continue
-                    } else {
-                        $graph = [Graph]::Start("AutoCreated")
+                    }
+                    else {
+                        #$graph = [Graph]::Start("AutoCreated")
+                        $current.SetPointer(([Graph]::Start("AutoCreated", $current, $true) | select-Object -Last 1).GetResult())
+                        $current = $current.GetPointer()
+                        <#
                         if ($current -is [System.Collections.IDictionary]) {
                             $current["Grid"] = $graph.Grid
                             $current = $graph.Grid
                             continue
-                        } else {
+                        }
+                        else {
                             $opSignal.LogCritical("❌ 'Grid' requires Graph or dictionary host.")
                             return $opSignal
                         }
+                        #>
                     }
                 }
                 "Signal" {
@@ -122,23 +152,38 @@ function Add-PathToDictionary {
                         $current = $current["Signal"]
                         $processed = $true
                         continue
-                    } else {
+                    }
+                    else {
                         $opSignal.LogCritical("❌ 'Signal' key requires dictionary host.")
                         return $opSignal
                     }
                 }
             }
 
+            if ($processed) {
+                continue
+            }
 
             # ░▒▓█ FINAL WRITE █▓▒░
             if ($isFinal) {
-                if ($current -is [System.Collections.IDictionary]) {
+                if ($currentContext -is [Graph]) {
+                    if ($value -is [Signal]) {
+                        $currentContext.RegisterSignal($key, $Value)
+                    }
+                    else {
+                        $currentContext.RegisterResultAsSignal($key, $Value)
+                    }
+
+                    $processed = $true
+                }
+                elseif ($current -is [System.Collections.IDictionary]) {
                     $current[$key] = $Value
                 }
                 elseif ($current -is [PSCustomObject] -or $current -is [System.Management.Automation.PSObject]) {
                     if (-not $current.PSObject.Properties[$key]) {
                         Add-Member -InputObject $current -MemberType NoteProperty -Name $key -Value $Value
-                    } else {
+                    }
+                    else {
                         $current.$key = $Value
                     }
                 }
@@ -156,7 +201,7 @@ function Add-PathToDictionary {
                 }
 
                 $opSignal.LogInformation("📥 Wrote '$key' → $($Value.GetType().Name)")
-                $opSignal.SetResult($Signal)
+                $opSignal.SetResult($Dictionary)
                 return $opSignal
             }
 
@@ -166,10 +211,33 @@ function Add-PathToDictionary {
 
             # ░▒▓█ INTERMEDIATE OBJECTS █▓▒░
             if ($current -is [System.Collections.IDictionary]) {
-                if (-not $current.Contains($key)) {
-                    $current[$key] = @{}
+                #    if (-not $current.Contains($key)) {
+
+                if ($currentContext -is [Graph]) {
+                    # ░▒▓█ GRAPH CONTEXT → LOOKUP OR REGISTER SOVEREIGN SIGNAL █▓▒░
+                    $grid = $currentContext.Grid
+
+                    if ($grid.Contains($key) -and $grid[$key] -is [Signal]) {
+                        $current = $grid[$key]
+                    }
+                    else {
+                        $newSignal = [Signal]::Start($key)
+                        $currentContext.RegisterSignal($key, $newSignal)
+                        $current = $newSignal
+                    }
                 }
-                $current = $current[$key]
+                else {
+                    # ░▒▓█ GENERIC DICTIONARY █▓▒░
+                    if (-not $current.Contains($key)) {
+                        $current[$key] = @{}
+                    }
+
+                    $current = $current[$key]
+                }
+                #
+                #    } else {
+                #        $current = $current[$key]
+                #    }
             }
             elseif ($current -is [PSCustomObject] -or $current -is [System.Management.Automation.PSObject]) {
                 if (-not $current.PSObject.Properties[$key]) {

@@ -244,6 +244,10 @@ class Signal {
             return $null
         }
     }
+        
+    [bool] HasResult() {
+        return $null -ne $this.Result
+    }
 
     [Signal] GetResultSignal() {
         $opSignal = [Signal]::Start("GetResultSignal:$($this.Name)") | Select-Object -Last 1

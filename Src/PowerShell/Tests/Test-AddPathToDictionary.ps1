@@ -27,7 +27,7 @@ function Test-Case {
     $wrappedSignal.SetResult($Dictionary)
 
     # 📝 Write value
-    $writeSignal = Add-PathToDictionary -Signal $wrappedSignal -Path $Path -Value $Value | Select-Object -Last 1
+    $writeSignal = Add-PathToDictionary -Dictionary $wrappedSignal -Path $Path -Value $Value | Select-Object -Last 1
     if ($writeSignal -isnot [Signal] -or $writeSignal.Failure()) {
         $opSignal.MergeSignal($writeSignal)
         $opSignal.LogCritical("❌ Write failed: $($writeSignal.Name)")

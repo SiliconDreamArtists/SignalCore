@@ -8,7 +8,7 @@ function Invoke-FormulaGraphCondenser {
     $opSignal = [Signal]::Start("Invoke-FormulaGraphCondenser", $Signal) | Select-Object -Last 1
 
     # ░▒▓█ RESOLVE PLAN ARRAY █▓▒░
-    $plansSignal = Resolve-PathFromDictionary -Dictionary $Signal -Path "%.GraphPlans" | Select-Object -Last 1
+    $plansSignal = Resolve-PathFromDictionary -Dictionary $Signal -Path "%.%.@.GraphPlans" | Select-Object -Last 1
     if ($opSignal.MergeSignalAndVerifyFailure($plansSignal)) {
         $opSignal.LogCritical("❌ No GraphPlans defined in Signal jacket.")
         return $opSignal
@@ -74,12 +74,14 @@ function Invoke-FormulaGraphCondenser {
             }
         }
         else {
-            $subSignal = [Signal]::Start("GraphPlan:$planName", $Signal, $null, $parentResult) | Select-Object -Last 1
 
-            Add-PathToDictionary -Dictionary $subSignal -Path "$%.SourceWirePath" -Value $plan.SourceWirePath | Out-Null
-            Add-PathToDictionary -Dictionary $subSignal -Path "$%.SourcesWirePath" -Value $plan.SourcesWirePath | Out-Null
+            # The subSignal Jacket Contains the source content, the Jacket's Jacket contains the plan to use and the resul in the $subSignal is the output
+            $subSignal = [Signal]::Start("GraphPlan:$planName", $Signal) | Select-Object -Last 1
+            $subSignal.SetJacket($Signal.GetJacket()) | Out-Null
 
-            $graphSignal = Resolve-PathFormulaGraphForJsonArray -Signal $subSignal | Select-Object -Last 1
+            Add-PathToDictionary -Dictionary $subSignal -Path "%.@.Plan" -Value $plan | Out-Null
+
+            $graphSignal = Resolve-PathFormulaGraphForJsonArray -ConductionSignal $subSignal | Select-Object -Last 1
             if ($opSignal.MergeSignalAndVerifyFailure($graphSignal)) {
                 $opSignal.LogWarning("⚠️ Failed to resolve graph for plan: $planName")
                 continue

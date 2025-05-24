@@ -1,3 +1,27 @@
+# =============================================================================
+# 🔁 Resolve-PathFormulaGraphForJsonArray (Declarative Signal Graph Builder)
+#  License: MIT License • Copyright (c) 2025 Silicon Dream Artists / BDDB
+#  Authors: Shadow PhanTom ☠️🧁👾️/🤖 • Neural Alchemist ⚗️☣️🐲 • Last Generated: 05/20/2025
+# =============================================================================
+# This function generates a sovereign Signal graph from a JSON array, using
+# declarative wire path references embedded in a scoped Signal Jacket.
+#
+# It is designed to be called within a FormulaGraphCondenser flow, where each
+# plan signal contains:
+#   - A SourceWirePath: path to the array of objects to convert to signals
+#   - A SourcesWirePath: key or path in each item that declares its linked nodes
+#
+# Each item becomes a Signal node with a `.Pointer` chain constructed from
+# cross-references defined in the SourcesWirePath. The graph is returned as a
+# result pointer in a finalized Grid structure.
+#
+# This function adheres to the SDA Doctrine of nested sovereign memory:
+# - Inputs are read from `%.@.Plan.*`
+# - Source data is accessed via `%.%`
+# - Output is returned in `.Result`
+#
+# All memory is recursively encapsulated, sovereign, and lineage-safe.
+
 function Resolve-PathFormulaGraphForJsonArray {
     param (
         [Parameter(Mandatory)]
@@ -7,8 +31,8 @@ function Resolve-PathFormulaGraphForJsonArray {
     $opSignal = [Signal]::Start("Resolve-PathFormulaGraphForJsonArray", $ConductionSignal) | Select-Object -Last 1
 
     # ░▒▓█ RESOLVE SOURCE CONFIG PATHS █▓▒░
-    $sourcePathSignal = Resolve-PathFromDictionary -Dictionary $ConductionSignal -Path "%.SourceWirePath" | Select-Object -Last 1
-    $sourcesKeySignal = Resolve-PathFromDictionary -Dictionary $ConductionSignal -Path "%.SourcesWirePath" | Select-Object -Last 1
+    $sourcePathSignal = Resolve-PathFromDictionary -Dictionary $ConductionSignal -Path "%.@.Plan.SourceWirePath" | Select-Object -Last 1
+    $sourcesKeySignal = Resolve-PathFromDictionary -Dictionary $ConductionSignal -Path "%.@.Plan.SourcesWirePath" | Select-Object -Last 1
     $opSignal.MergeSignal(@($sourcePathSignal, $sourcesKeySignal)) | Out-Null
 
     if ($opSignal.MergeSignalAndVerifyFailure(@($sourcePathSignal, $sourcesKeySignal))) {
@@ -20,7 +44,7 @@ function Resolve-PathFormulaGraphForJsonArray {
     $sourcesKey = $sourcesKeySignal.GetResult()
 
     # ░▒▓█ GET ROOT ARRAY FROM CONDUCTION SIGNAL RESULT █▓▒░
-    $arraySignal = Resolve-PathFromDictionary -Dictionary ($ConductionSignal.GetResult()) -Path $sourcePath | Select-Object -Last 1
+    $arraySignal = Resolve-PathFromDictionary -Dictionary $ConductionSignal -Path "%.%.$($sourcePath)" | Select-Object -Last 1
     $opSignal.MergeSignal(@($arraySignal)) | Out-Null
 
     if ($opSignal.MergeSignalAndVerifyFailure($arraySignal)) {
